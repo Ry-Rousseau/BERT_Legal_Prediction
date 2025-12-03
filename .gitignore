@@ -211,3 +211,6 @@ checkpoints/models/dry_test_run/model.safetensors
 results/outputs/test_run/
 data/justice_tsv/
 data/casehold/
+checkpoints/models/fine_tuned_base_bert_legal_teacher/model.safetensors
+*.safetensors
+*.pt
