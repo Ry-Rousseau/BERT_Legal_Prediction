@@ -107,3 +107,42 @@ if __name__ == "__main__":
     dry_run_mode = "--dry-run" in sys.argv
     # main(dry_run=dry_run_mode)
     main()
+
+"""
+ACCESSING TRAINING RESULTS & FINE-TUNED MODEL:
+
+1. Training Logs & Metrics:
+   - Location: checkpoints/models/fine_tuned_base_bert_legal_teacher/
+   - Files:
+     * trainer_state.json - Contains training/eval loss and accuracy per epoch
+     * training_args.bin - Training configuration used
+     * checkpoint-{N}/ - Intermediate checkpoints (one per epoch)
+
+2. Final Model (Best checkpoint auto-loaded):
+   - Location: checkpoints/models/fine_tuned_base_bert_legal_teacher/
+   - Files: pytorch_model.bin, config.json, tokenizer files
+
+3. Load the fine-tuned model:
+   from transformers import AutoModelForMultipleChoice, AutoTokenizer
+
+   model_path = "checkpoints/models/fine_tuned_base_bert_legal_teacher"
+   model = AutoModelForMultipleChoice.from_pretrained(model_path)
+   tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+   # Use for inference or distillation
+   model.eval()
+
+4. Evaluate on test set:
+   from transformers import Trainer
+   from data_loader import get_dataloaders
+
+   datasets = get_dataloaders(tokenizer, return_dict=True)
+   trainer = Trainer(model=model, compute_metrics=compute_metrics)
+   results = trainer.evaluate(datasets['test'])
+   print(f"Test Accuracy: {results['eval_accuracy']:.4f}")
+   print(f"Test Loss: {results['eval_loss']:.4f}")
+
+5. Quick accuracy check during training:
+   - Check trainer_state.json for eval_accuracy at each epoch
+   - Example: {"epoch": 3.0, "eval_accuracy": 0.6823, "eval_loss": 0.9234}
+"""
