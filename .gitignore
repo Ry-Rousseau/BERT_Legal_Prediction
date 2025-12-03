@@ -207,3 +207,7 @@ marimo/_lsp/
 __marimo__/
 *.0'
 *.0
+checkpoints/models/dry_test_run/model.safetensors
+results/outputs/test_run/
+data/justice_tsv/
+data/casehold/
