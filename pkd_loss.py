@@ -6,17 +6,22 @@ def compute_pkd_loss(student_states, teacher_states, strategy="skip"):
     Computes Patient Knowledge Distillation loss.
     """
     loss = 0
-    num_student_layers = len(student_states)
+    
+    #only iterate up to N-1 layers 
+    num_student_layers = len(student_states) - 1
     num_teacher_layers = len(teacher_states)
 
     # 1. Define Mapping Strategy
     if strategy == "skip":
         # Maps student 1->2, 2->4... (Every 2nd layer)
-        # Note: We slice [1:] to skip the embedding layer output if included
+        # Paper: layers {2, 4, 6, 8, 10} (1-based)
+        # Code: indices [1, 3, 5, 7, 9] (0-based)
         teacher_indices = [i * 2 + 1 for i in range(num_student_layers)]
     elif strategy == "last":
+        # Maps student last 5 layers to teacher last 5 layers (excluding final)
+        # Paper: layers {7, 8, 9, 10, 11} (1-based)
         # Maps student 1->7, 2->8... (Last k layers)
-        teacher_indices = [num_teacher_layers - num_student_layers + i for i in range(num_student_layers)]
+        teacher_indices = [num_teacher_layers - num_student_layers - 1 + i for i in range(num_student_layers)]
 
     # 2. Compute Loss - only iterate over valid indices
     for s_idx, t_idx in enumerate(teacher_indices):

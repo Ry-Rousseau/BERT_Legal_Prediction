@@ -146,6 +146,10 @@ def main():
     batch_size = 32
     num_epochs = 4
 
+    # messy, model working folder
+    run_name = f"student_L{num_student_layers}_PKD-{pkd_strategy}_A{str(alpha).replace('.', 'p')}_B{int(beta)}_T{int(temperature)}_LR{learning_rate}"
+    output_dir = f"results/training_runs/{run_name}"
+
 ###########################################
     # Load Tokenizer & Teacher
     # REPLACE THIS with the path to your FINE-TUNED CaseHOLD Teacher
@@ -204,11 +208,7 @@ def main():
     trainer = PKDTrainer(
         teacher_model=teacher_model,
         eval_dataset=eval_dataset,
-        evaluation_strategy="epoch",
-        save_strategy = "epoch",
         pkd_strategy=pkd_strategy,
-        load_best_model_at_end=True,
-        metric_for_best_model="accuracy",
         model=student_model,
         args=training_args,
         train_dataset=train_dataset,
@@ -249,7 +249,7 @@ def main():
     log_to_csv(training_args, hyperparams, metrics)
 
     # Save
-    student_model.save_pretrained(f"checkpoints/models/student_L{hyperparams['student_layers']}_PKD-{hyperparams['pkd_strategy']}_A{str(hyperparams['alpha']).replace('.', 'p')}_B{int(hyperparams['beta'])}_T{int(hyperparams['temperature'])}")
+    student_model.save_pretrained(f"checkpoints/models/student_L{hyperparams['student_layers']}_PKD-{hyperparams['pkd_strategy']}_A{str(hyperparams['alpha']).replace('.', 'p')}_B{int(hyperparams['beta'])}_T{int(hyperparams['temperature'])}_LR{learning_rate}")
     print("Training complete!")
 
 if __name__ == "__main__":
