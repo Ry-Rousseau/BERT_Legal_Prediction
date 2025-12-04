@@ -22,7 +22,7 @@ def preprocess_function(examples, tokenizer):
         second_sentences,
         truncation=True,
         padding="max_length",
-        max_length=256 # Adjust based on GPU memory
+        max_length=512 # increasing to 512 from 216 for cloud compute run
     )
 
     # Un-flatten: Group back into sets of 5

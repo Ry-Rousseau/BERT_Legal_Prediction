@@ -1,5 +1,5 @@
-# distillation script for running on local
-# deprecated since GPU not powerful enough to avoid memory over-run errors
+# distillation script for running on cloud A40 GPU with 48 GB VRAM
+# implements grid search over hyperparameter search space 
 
 import torch
 import torch.nn.functional as F
@@ -146,7 +146,7 @@ def main():
     # note that temperature is set above 
     
     # SECONDARY PARAMETERS (those not in grid search in cheng et al. 2019)
-    batch_size = 8
+    batch_size = 32
     num_epochs = 4
 
     # messy, model working folder
@@ -181,10 +181,12 @@ def main():
         max_steps = -1,
         
         # If GPU runs out of memory, set this to 16 and add 'gradient_accumulation_steps=2'
-        per_device_train_batch_size=batch_size, # increase for full training
-        gradient_accumulation_steps=4,
-        gradient_checkpointing=True,
-        per_device_eval_batch_size=4, # drop this to prevent memory overspilling from gpu to ram
+        per_device_train_batch_size=batch_size,
+        #gradient_accumulation_steps=1, remove for A40 run
+        gradient_checkpointing=False, # significant speed up on A40
+        per_device_eval_batch_size=64, # drop this to prevent memory overspilling from gpu to ram
+        dataloader_num_workers=8, # use 8 CPU cores to feed the GPU faster
+        
         
         #Learning rate
         learning_rate=learning_rate,
@@ -203,7 +205,9 @@ def main():
         # Hardware
         use_cpu=False, # Explicitly use GPU
         no_cuda=False,  # Ensure CUDA is not disabled
-        fp16=True
+        fp16=True,
+        tf32=True, # Use tensorflow-32 for A40
+        optim="adamw_torch_fused" #Use a faster fused optimized for A40
     )
 
     print(f"Training device: {training_args.device}")

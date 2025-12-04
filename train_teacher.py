@@ -1,3 +1,6 @@
+# Old script for training teacher locally
+# see train_teacher_cloud for updated version
+
 import os
 from transformers import AutoModelForMultipleChoice, AutoTokenizer, TrainingArguments, Trainer
 from data_loader import get_dataloaders # Reuse your modern data loader!
