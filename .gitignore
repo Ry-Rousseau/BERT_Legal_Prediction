@@ -214,3 +214,8 @@ data/casehold/
 checkpoints/models/fine_tuned_base_bert_legal_teacher/model.safetensors
 *.safetensors
 *.pt
+nul
+archive/
+results/training_runs/vanilla_kd_grid_search/
+results/training_runs/fine_tuned_base_bert_legal_teacher/
+checkpoints/models/fine_tuned_teacher_lr_1e-5/
