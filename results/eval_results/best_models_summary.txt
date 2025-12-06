@@ -1,0 +1,56 @@
+======================================================================
+VANILLA KNOWLEDGE DISTILLATION GRID SEARCH - RESULTS SUMMARY
+======================================================================
+
+BEST OVERALL MODEL
+----------------------------------------------------------------------
+Run Name:        vanilla_L6_A0p7_T20
+Alpha:           0.7
+Temperature:     20.0
+Epoch:           3
+Step:            3975
+Dev Accuracy:    0.7563
+Dev Loss:        0.6423
+Checkpoint Path: vanilla_L6_A0p7_T20/checkpoint-3975
+
+BEST MODEL PER HYPERPARAMETER COMBINATION
+----------------------------------------------------------------------
+vanilla_L6_A0p7_T20            | Epoch 3 | Acc: 0.7563 | Loss: 0.6423
+vanilla_L6_A0p7_T10            | Epoch 3 | Acc: 0.7561 | Loss: 0.6422
+vanilla_L6_A0p7_T5             | Epoch 4 | Acc: 0.7559 | Loss: 0.6416
+vanilla_L6_A0p5_T10            | Epoch 4 | Acc: 0.7541 | Loss: 0.6465
+vanilla_L6_A0p5_T5             | Epoch 4 | Acc: 0.7539 | Loss: 0.6460
+vanilla_L6_A0p5_T20            | Epoch 4 | Acc: 0.7535 | Loss: 0.6468
+vanilla_L6_A0p2_T20            | Epoch 4 | Acc: 0.7516 | Loss: 0.6599
+vanilla_L6_A0p2_T5             | Epoch 4 | Acc: 0.7499 | Loss: 0.6552
+vanilla_L6_A0p2_T10            | Epoch 4 | Acc: 0.7486 | Loss: 0.6573
+
+BEST MODEL PER EPOCH (Across All Combinations)
+----------------------------------------------------------------------
+Epoch 1 | vanilla_L6_A0p7_T10            | Acc: 0.7529 | Alpha: 0.7, Temp: 10
+Epoch 2 | vanilla_L6_A0p7_T10            | Acc: 0.7541 | Alpha: 0.7, Temp: 10
+Epoch 3 | vanilla_L6_A0p7_T20            | Acc: 0.7563 | Alpha: 0.7, Temp: 20
+Epoch 4 | vanilla_L6_A0p7_T5             | Acc: 0.7559 | Alpha: 0.7, Temp: 5
+
+HYPERPARAMETER ANALYSIS
+----------------------------------------------------------------------
+
+Average Dev Accuracy by Alpha (Final Epoch):
+  Alpha 0.7: 0.7552
+  Alpha 0.5: 0.7538
+  Alpha 0.2: 0.7500
+
+Average Dev Accuracy by Temperature (Final Epoch):
+  Temp 20: 0.7533
+  Temp 5: 0.7532
+  Temp 10: 0.7526
+
+CONVERGENCE ANALYSIS
+----------------------------------------------------------------------
+vanilla_L6_A0p7_T10: Overfitting (Epoch 3: 0.7561 -> Epoch 4: 0.7550, Delta=-0.0011)
+vanilla_L6_A0p7_T20: Overfitting (Epoch 3: 0.7563 -> Epoch 4: 0.7548, Delta=-0.0015)
+vanilla_L6_A0p7_T5: Converged (Epoch 3: 0.7556 -> Epoch 4: 0.7559, Delta=+0.0003)
+
+======================================================================
+Report generated: 2025-12-06 03:46:20.183652
+======================================================================

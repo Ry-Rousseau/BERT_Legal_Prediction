@@ -1,5 +1,31 @@
-# distillation script for running on cloud A40 GPU with 48 GB VRAM
-# implements grid search over hyperparameter search space 
+"""
+Patient Knowledge Distillation (PKD-Skip) Grid Search - Stage 2
+
+STAGE 2: Patient KD Search (16 Runs)
+Goal: Find the best β (Beta) for each specific student depth.
+Grid: 4 Student Sizes × 4 Betas = 16 Runs.
+
+FIXED HYPERPARAMETERS FROM STAGE 1:
+- Alpha (α) = 0.7 (distillation weight) - FIXED from vanilla KD grid search
+- Temperature (T) = 20 - FIXED from vanilla KD grid search
+
+GRID SEARCH PARAMETERS:
+- Student Layers: [6, 4, 3, 2] - 4 different model sizes
+- Beta (β): [10, 100, 500, 1000] - 4 different patient loss weights
+
+This script implements PKD with "skip" strategy, where student layers are matched
+to teacher layers by skipping intermediate teacher layers.
+
+Architecture:
+- Teacher: 12 layers (nlpaueb/legal-bert-base-uncased)
+- Students: 6-layer, 4-layer, 3-layer, 2-layer variants
+
+Training Details:
+- 4 epochs (same as Stage 1)
+- Learning rate: 1e-5 (same as best teacher run)
+- Batch size: 32
+- Saves checkpoints every epoch for post-hoc evaluation
+"""
 
 import torch
 import torch.nn.functional as F
@@ -11,42 +37,53 @@ from train_teacher_cloud import compute_metrics
 import csv
 import os
 from datetime import datetime
+
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 
-# Implement the balance between alpha, beta and temperature
-# 1. Define the Custom Distillation Trainer
 class PKDTrainer(Trainer):
-    def __init__(self, teacher_model=None, pkd_strategy="skip", alpha=0.5, beta=10.0, temperature=10.0, *args, **kwargs):
+    """
+    Custom Trainer for Patient Knowledge Distillation with Skip Strategy
+
+    Implements the full PKD loss function:
+    L_total = (1-α)·L_CE + α·L_KD + β·L_PT
+
+    Where:
+    - L_CE: Cross-entropy loss (hard labels)
+    - L_KD: KL divergence loss (soft labels from teacher)
+    - L_PT: Patient loss (intermediate layer matching)
+    """
+
+    def __init__(self, teacher_model=None, pkd_strategy="skip", alpha=0.7, beta=100.0, temperature=20.0, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.teacher = teacher_model
         self.pkd_strategy = pkd_strategy
-        self.alpha = alpha # Weight for Soft Target Loss (KL Divergence)
-        self.beta = beta   # Weight for Patient Loss (Intermediate Layers)
-        self.temperature = temperature # Temperature for knowledge distillation softmax
+        self.alpha = alpha       # Weight for Soft Target Loss (KL Divergence)
+        self.beta = beta         # Weight for Patient Loss (Intermediate Layers)
+        self.temperature = temperature  # Temperature for knowledge distillation softmax
 
         # Freeze teacher and move to same device
         self.teacher.eval()
         self.teacher.to(self.args.device)
 
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None): # Updated signature
-        # 1. Forward pass Student
-        # output_hidden_states=True is required for PKD
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        """
+        Compute PKD loss combining task loss, distillation loss, and patient loss
+        """
+        # 1. Forward pass Student (with hidden states for PKD)
         student_outputs = model(**inputs, output_hidden_states=True)
-        
-        # 2. Forward pass Teacher (No Grad)
+
+        # 2. Forward pass Teacher (no gradients)
         with torch.no_grad():
             teacher_outputs = self.teacher(**inputs, output_hidden_states=True)
 
         # 3. Calculate Losses
-        
+
         # A. Task Loss (Cross Entropy) - "Hard Labels"
-        # HF models calculate this automatically if 'labels' are provided
-        task_loss = student_outputs.loss 
-        
+        task_loss = student_outputs.loss
+
         # B. Distillation Loss (Soft Targets) - "Knowledge Distillation"
-        # KL Divergence between Student logits and Teacher logits
-        T = self.temperature  # Use temperature from hyperparameter
+        T = self.temperature
         distill_loss = F.kl_div(
             F.log_softmax(student_outputs.logits / T, dim=-1),
             F.softmax(teacher_outputs.logits / T, dim=-1),
@@ -54,22 +91,19 @@ class PKDTrainer(Trainer):
         ) * (T * T)
 
         # C. Patient Loss (Intermediate Layers) - "PKD"
-        # We skip the first hidden state (embeddings) usually, so we take [1:]
-        # You might need to adjust slicing depending on exact model config
+        # Skip first hidden state (embeddings), so we take [1:]
         pkd_loss = compute_pkd_loss(
-            student_outputs.hidden_states[1:], 
-            teacher_outputs.hidden_states[1:], 
+            student_outputs.hidden_states[1:],
+            teacher_outputs.hidden_states[1:],
             strategy=self.pkd_strategy
         )
 
-        # 4. Combine
+        # 4. Combine losses
         total_loss = (1 - self.alpha) * task_loss + self.alpha * distill_loss + self.beta * pkd_loss
-        
+
         return (total_loss, student_outputs) if return_outputs else total_loss
 
-# ---------------------------------------------------------
-# Experiment Logging
-# ---------------------------------------------------------
+
 def log_to_csv(training_args, hyperparams, metrics, csv_path="results/distillation_experiments.csv"):
     """
     Logs experiment results to a CSV file.
@@ -133,116 +167,123 @@ def log_to_csv(training_args, hyperparams, metrics, csv_path="results/distillati
 
     print(f"[SUCCESS] Logged experiment to {csv_path}")
 
-# ---------------------------------------------------------
-# Main Execution
-# ---------------------------------------------------------
+
 def main():
-######################################    
-    pkd_strategy = "skip" #skip or last
-    num_student_layers = 6
-    
-    # PRIMARY PARAMETER NAMING SPACE
-    #temperature = 10.0  # Temperature for KD softmax (Cheng et al. 2019: 5, 10, 20)
-    #alpha = 0.7  # Weight for distillation loss (Cheng et al. 2019: 0.2, 0.5, 0.7)
-    beta = 0  # For vanilla KD (no patient loss). Set to 100 for PKD
-    learning_rate = 1e-5  # Same LR as best parent fine-tuning run 
-    
-    # SECONDARY PARAMETERS (those not in grid search in cheng et al. 2019)
+    """
+    Main execution function for PKD-Skip grid search
+    """
+
+    print("="*70)
+    print("STAGE 2: PATIENT KNOWLEDGE DISTILLATION (PKD-SKIP) GRID SEARCH")
+    print("="*70)
+
+    ######################################
+    # FIXED PARAMETERS FROM STAGE 1
+    ######################################
+    pkd_strategy = "skip"  # Skip strategy for layer matching
+    alpha = 0.7            # FIXED - optimal from Stage 1 vanilla KD
+    temperature = 20.0     # FIXED - optimal from Stage 1 vanilla KD
+
+    ######################################
+    # GRID SEARCH PARAMETERS
+    ######################################
+    student_layer_sizes = [6, 4, 3, 2]  # 4 different student architectures
+    betas = [10, 100, 500, 1000]        # 4 different patient loss weights
+
+    ######################################
+    # TRAINING CONFIGURATION
+    ######################################
+    learning_rate = 1e-5   # Same as best teacher run
     batch_size = 32
     num_epochs = 4
 
-###########################################
-    #Define grid search, from cheng et al 2019 values
-    alphas = [0.2, 0.5, 0.7]
-    temperatures = [5.0, 10.0, 20.0]
+    ######################################
+    # PATHS AND SETUP
+    ######################################
+    base_output_dir = "results/training_runs/pkd_skip_grid_search"
 
-    base_output_dir = "results/training_runs/vanilla_kd_grid_search"
-
-
-#####################################
     # Load Tokenizer & Teacher
-    # REPLACE THIS with the path to your FINE-TUNED CaseHOLD Teacher
-    teacher_path = "results/training_runs/fine_tuned_base_bert_legal_teacher/run_lr_1e-05/checkpoint-1325" 
-    tokenizer = AutoTokenizer.from_pretrained(teacher_path)
-    
-    print("Loading Teacher...")
+    teacher_path = "results/training_runs/fine_tuned_base_bert_legal_teacher/run_lr_1e-05/checkpoint-1325"
+    tokenizer = AutoTokenizer.from_pretrained("nlpaueb/legal-bert-base-uncased")
+
+    print("\nLoading Teacher model...")
     teacher_model = AutoModelForMultipleChoice.from_pretrained(teacher_path)
-    
+
     # Load Data (using pre-split files)
     print("Processing Data...")
     datasets = get_dataloaders(tokenizer, return_dict=True)
     train_dataset = datasets['train']
     eval_dataset = datasets['dev']
 
-    #Trackers
-    best_accuracy = 0.0
-    best_params = {}
-    
-    print(f"\n{'='*60}")
-    print(f"STARTING GRID SEARCH: {len(alphas)}x{len(temperatures)} = {len(alphas)*len(temperatures)} runs")
-    print(f"Alphas: {alphas}")
-    print(f"Temperatures: {temperatures}")
-    print(f"{'='*60}\n")
-    
-    for alpha in alphas:
-        for T in temperatures:
-            # Skip already completed run
-            if alpha == 0.2 and T == 5.0:
-                print(f"\n" + "="*50)
-                print(f"SKIPPING: Alpha={alpha}, Temp={T} (already completed)")
-                print("="*50)
-                continue
+    print(f"Train examples: {len(train_dataset)}")
+    print(f"Dev examples: {len(eval_dataset)}")
 
-            print(f"\n" + "="*50)
-            print(f"Testing: Alpha={alpha}, Temp={T}")
-            print("="*50)     
-                   
-            # Create Student
-            print("Creating Student...")
+    ######################################
+    # GRID SEARCH EXECUTION
+    ######################################
+    total_runs = len(student_layer_sizes) * len(betas)
+
+    print(f"\n{'='*70}")
+    print(f"STARTING GRID SEARCH: {len(student_layer_sizes)} sizes × {len(betas)} betas = {total_runs} runs")
+    print(f"Student Layers: {student_layer_sizes}")
+    print(f"Betas: {betas}")
+    print(f"Fixed Alpha: {alpha}")
+    print(f"Fixed Temperature: {temperature}")
+    print(f"{'='*70}\n")
+
+    run_counter = 0
+
+    for num_student_layers in student_layer_sizes:
+        for beta in betas:
+            run_counter += 1
+
+            print(f"\n" + "="*70)
+            print(f"RUN {run_counter}/{total_runs}: L{num_student_layers}_B{beta}")
+            print(f"Student Layers: {num_student_layers}, Beta: {beta}")
+            print(f"(Alpha={alpha}, Temp={temperature})")
+            print("="*70)
+
+            # Create Student model
+            print(f"Creating {num_student_layers}-layer student model...")
             student_model = create_student_model(teacher_model, num_student_layers=num_student_layers)
-            
-            run_name = f"vanilla_L{num_student_layers}_A{str(alpha).replace('.','p')}_T{int(T)}"
-            
+
+            # Generate run name
+            run_name = f"pkd_skip_L{num_student_layers}_B{beta}"
             run_output_dir = os.path.join(base_output_dir, run_name)
 
-            # Training Args
+            # Training Arguments
             training_args = TrainingArguments(
-
                 output_dir=run_output_dir,
-                
-                num_train_epochs=num_epochs, # follow same epochs as cheng et al 2019 
-                max_steps = -1,
-                
-                # If GPU runs out of memory, set this to 16 and add 'gradient_accumulation_steps=2'
+
+                num_train_epochs=num_epochs,
+                max_steps=-1,
+
+                # Batch size and optimization
                 per_device_train_batch_size=batch_size,
-                #gradient_accumulation_steps=1, remove for A40 run
-                gradient_checkpointing=False, # significant speed up on A40
-                #per_device_eval_batch_size=16, # drop this to prevent memory overspilling from gpu to ram
-                dataloader_num_workers=8, # use 8 CPU cores to feed the GPU faster
-                #Learning rate
+                gradient_checkpointing=False,  # Faster on A40
+                dataloader_num_workers=8,      # Use 8 CPU cores
                 learning_rate=learning_rate,
-                
-                # Evaluation
-                eval_strategy="no", # change evaluation 
+
+                # Evaluation (disabled during training, will evaluate post-hoc)
+                eval_strategy="no",
                 save_strategy="epoch",
                 load_best_model_at_end=False,
-                #metric_for_best_model="accuracy",
                 per_device_eval_batch_size=4,
-                        
+
                 # Logging
-                logging_steps=100, # Log every 100 steps to track progress
-                remove_unused_columns=False, # Important so we don't drop columns needed for logic
-                report_to= "none", # Must be string, not boolean
-                
-                # Hardware
-                use_cpu=False, # Explicitly use GPU
-                no_cuda=False,  # Ensure CUDA is not disabled
+                logging_steps=100,
+                remove_unused_columns=False,
+                report_to="none",
+
+                # Hardware optimization
+                use_cpu=False,
+                no_cuda=False,
                 fp16=True,
-                tf32=True, # Use tensorflow-32 for A40
-                optim="adamw_torch_fused" #Use a faster fused optimized for A40
+                tf32=True,
+                optim="adamw_torch_fused"
             )
 
-            # Initialize Trainer
+            # Initialize PKD Trainer
             trainer = PKDTrainer(
                 teacher_model=teacher_model,
                 eval_dataset=eval_dataset,
@@ -251,23 +292,19 @@ def main():
                 args=training_args,
                 train_dataset=train_dataset,
                 tokenizer=tokenizer,
-                compute_metrics=compute_metrics,  # Add metrics computation
+                compute_metrics=compute_metrics,
 
-                # HYPERPARAMETERS HERE
-                alpha=alpha,  # Balances Hard Labels vs Soft Labels (Distillation)
-                beta=beta,  # Balances the "Patient" intermediate layer loss
-                temperature=T,  # Temperature for KD softmax (higher = softer)
+                # HYPERPARAMETERS
+                alpha=alpha,           # FIXED from Stage 1
+                beta=beta,             # GRID SEARCH PARAMETER
+                temperature=temperature  # FIXED from Stage 1
             )
-            
+
             # Train
-            print("Starting Distillation...")
+            print("Starting PKD Distillation...")
             train_result = trainer.train()
 
-            # Evaluate on dev set to get best metrics
-            # print("Evaluating on dev set...")
-            #eval_result = trainer.evaluate()
-
-            # Extract metrics for logging (no evaluation due to OOM issues)
+            # Extract metrics (no evaluation during training)
             metrics = {
                 "best_dev_accuracy": 0.0,  # Will evaluate separately after training
                 "best_dev_loss": 0.0,
@@ -275,38 +312,39 @@ def main():
                 "train_samples_per_second": train_result.metrics.get("train_samples_per_second", 0.0)
             }
 
-            acc = 0.0  # No accuracy since we skipped evaluation
-            
             # Prepare hyperparameters dictionary
             hyperparams = {
                 "pkd_strategy": pkd_strategy,
                 "student_layers": num_student_layers,
                 "alpha": alpha,
                 "beta": beta,
-                "temperature": T
+                "temperature": temperature
             }
-            
-            # Log to CSV for this run
+
+            # Log to CSV
             log_to_csv(training_args, hyperparams, metrics)
 
-            # Update Winner
-            if acc > best_accuracy:
-                best_accuracy = acc
-                best_params = {"alpha": alpha, "temperature": T}
-                print(f" NEW BEST FOUND: {acc:.4f}")
+            # Save final model (optional - checkpoints already saved)
+            final_model_path = os.path.join(run_output_dir, "final_model")
+            student_model.save_pretrained(final_model_path)
+            tokenizer.save_pretrained(final_model_path)
+            print(f"Final model saved to {final_model_path}")
 
-            # Save this model
-            model_save_path = f"checkpoints/models/student_L{hyperparams['student_layers']}_A{str(hyperparams['alpha']).replace('.', 'p')}_B{int(hyperparams['beta'])}_T{int(hyperparams['temperature'])}_LR{learning_rate}"
-            student_model.save_pretrained(model_save_path)
-            print(f"Model saved to {model_save_path}\n")
+            print(f"\n✓ Run {run_counter}/{total_runs} complete\n")
 
-    # Final summary
-    print("\n" + "="*60)
-    print("GRID SEARCH COMPLETE")
-    print("="*60)
-    print(f"Best Accuracy: {best_accuracy:.4f}")
-    print(f"Best Parameters: {best_params}")
-    print("="*60)
+    # Final Summary
+    print("\n" + "="*70)
+    print("STAGE 2 GRID SEARCH COMPLETE")
+    print("="*70)
+    print(f"Total runs completed: {total_runs}")
+    print(f"Results directory: {base_output_dir}")
+    print(f"Experiment log: results/distillation_experiments.csv")
+    print("\nNext steps:")
+    print("  1. Run post-hoc evaluation on all 16 runs using evaluate_grid_search.py")
+    print("  2. Analyze results to find optimal (student_size, beta) combinations")
+    print("  3. Compare PKD performance vs vanilla KD from Stage 1")
+    print("="*70)
+
 
 if __name__ == "__main__":
     main()
