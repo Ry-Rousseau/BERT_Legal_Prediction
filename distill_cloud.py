@@ -237,6 +237,11 @@ def main():
         for beta in betas:
             run_counter += 1
 
+            # Skip first 4 runs (L6 B10,100,500,1000 already completed)
+            if run_counter <= 4:
+                print(f"\n[SKIPPING] Run {run_counter}/{total_runs}: L{num_student_layers}_B{beta} (already completed)")
+                continue
+
             print(f"\n" + "="*70)
             print(f"RUN {run_counter}/{total_runs}: L{num_student_layers}_B{beta}")
             print(f"Student Layers: {num_student_layers}, Beta: {beta}")
@@ -269,6 +274,7 @@ def main():
                 save_strategy="epoch",
                 load_best_model_at_end=False,
                 per_device_eval_batch_size=4,
+                save_only_model=True,  # CRITICAL: Only save model weights, not optimizer/scheduler
 
                 # Logging
                 logging_steps=100,

@@ -1,0 +1,39 @@
+======================================================================
+PKD-SKIP vs VANILLA KD COMPARISON
+======================================================================
+
+VANILLA KD BASELINE (6-layer student)
+----------------------------------------------------------------------
+Best Run: vanilla_L6_A0p7_T20
+Dev Accuracy: 0.7563
+
+PKD-SKIP RESULTS
+----------------------------------------------------------------------
+
+6-layer student:
+  Best Run: pkd_skip_L6_B1000
+  Dev Accuracy: 0.7576
+  vs Vanilla KD: +0.0013 (+0.17%)
+
+4-layer student:
+  Best Run: pkd_skip_L4_B100
+  Dev Accuracy: 0.7446
+
+3-layer student:
+  Best Run: pkd_skip_L3_B1000
+  Dev Accuracy: 0.7263
+
+2-layer student:
+  Best Run: pkd_skip_L2_B500
+  Dev Accuracy: 0.6827
+
+======================================================================
+KEY FINDINGS
+----------------------------------------------------------------------
+1. PKD 6-layer vs Vanilla KD 6-layer: +0.0013
+   -> PKD provides 0.13% absolute improvement
+
+2. Smallest PKD model matching vanilla KD: 6 layers
+   -> 50.0% model compression while maintaining performance
+
+======================================================================

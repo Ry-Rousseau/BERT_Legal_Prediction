@@ -1,0 +1,99 @@
+======================================================================
+PKD-SKIP GRID SEARCH RESULTS SUMMARY
+======================================================================
+
+OVERALL BEST MODEL
+----------------------------------------------------------------------
+Run: pkd_skip_L6_B1000
+Student Layers: 6
+Beta: 1000.0
+Best Epoch: 3
+Dev Accuracy: 0.7576
+Dev Loss: 0.6446
+
+BEST MODEL PER STUDENT SIZE
+----------------------------------------------------------------------
+
+6-layer student:
+  Run: pkd_skip_L6_B1000
+  Best Beta: 1000.0
+  Best Epoch: 3
+  Dev Accuracy: 0.7576
+  Dev Loss: 0.6446
+
+4-layer student:
+  Run: pkd_skip_L4_B100
+  Best Beta: 100.0
+  Best Epoch: 3
+  Dev Accuracy: 0.7446
+  Dev Loss: 0.6727
+
+3-layer student:
+  Run: pkd_skip_L3_B1000
+  Best Beta: 1000.0
+  Best Epoch: 4
+  Dev Accuracy: 0.7263
+  Dev Loss: 0.7390
+
+2-layer student:
+  Run: pkd_skip_L2_B500
+  Best Beta: 500.0
+  Best Epoch: 4
+  Dev Accuracy: 0.6827
+  Dev Loss: 0.8649
+
+======================================================================
+BEST MODEL PER BETA VALUE
+----------------------------------------------------------------------
+
+Beta = 10.0:
+  Run: pkd_skip_L6_B10
+  Student Layers: 6
+  Best Epoch: 4
+  Dev Accuracy: 0.7542
+  Dev Loss: 0.6407
+
+Beta = 100.0:
+  Run: pkd_skip_L6_B100
+  Student Layers: 6
+  Best Epoch: 3
+  Dev Accuracy: 0.7559
+  Dev Loss: 0.6423
+
+Beta = 500.0:
+  Run: pkd_skip_L6_B500
+  Student Layers: 6
+  Best Epoch: 3
+  Dev Accuracy: 0.7559
+  Dev Loss: 0.6437
+
+Beta = 1000.0:
+  Run: pkd_skip_L6_B1000
+  Student Layers: 6
+  Best Epoch: 3
+  Dev Accuracy: 0.7576
+  Dev Loss: 0.6446
+
+======================================================================
+CONVERGENCE ANALYSIS (Epoch 3 -> Epoch 4)
+----------------------------------------------------------------------
+pkd_skip_L2_B10: Still improving (Epoch 3: 0.6776 -> Epoch 4: 0.6816, Delta=+0.0040)
+pkd_skip_L2_B100: Still improving (Epoch 3: 0.6780 -> Epoch 4: 0.6791, Delta=+0.0011)
+pkd_skip_L2_B1000: Still improving (Epoch 3: 0.6784 -> Epoch 4: 0.6820, Delta=+0.0036)
+pkd_skip_L2_B500: Still improving (Epoch 3: 0.6799 -> Epoch 4: 0.6827, Delta=+0.0028)
+pkd_skip_L3_B10: Converged (Epoch 3: 0.7257 -> Epoch 4: 0.7259, Delta=+0.0002)
+pkd_skip_L3_B100: Still improving (Epoch 3: 0.7237 -> Epoch 4: 0.7252, Delta=+0.0015)
+pkd_skip_L3_B1000: Still improving (Epoch 3: 0.7248 -> Epoch 4: 0.7263, Delta=+0.0015)
+pkd_skip_L3_B500: Still improving (Epoch 3: 0.7242 -> Epoch 4: 0.7252, Delta=+0.0010)
+pkd_skip_L4_B10: Converged (Epoch 3: 0.7433 -> Epoch 4: 0.7442, Delta=+0.0009)
+pkd_skip_L4_B100: Converged (Epoch 3: 0.7446 -> Epoch 4: 0.7444, Delta=-0.0002)
+pkd_skip_L4_B1000: Converged (Epoch 3: 0.7442 -> Epoch 4: 0.7439, Delta=-0.0003)
+pkd_skip_L4_B500: Converged (Epoch 3: 0.7441 -> Epoch 4: 0.7439, Delta=-0.0002)
+pkd_skip_L6_B10: Converged (Epoch 3: 0.7537 -> Epoch 4: 0.7542, Delta=+0.0005)
+pkd_skip_L6_B100: Overfitting (Epoch 3: 0.7559 -> Epoch 4: 0.7542, Delta=-0.0017)
+pkd_skip_L6_B1000: Overfitting (Epoch 3: 0.7576 -> Epoch 4: 0.7552, Delta=-0.0024)
+pkd_skip_L6_B500: Converged (Epoch 3: 0.7559 -> Epoch 4: 0.7550, Delta=-0.0009)
+
+======================================================================
+Report generated: 2025-12-08 10:04:38.245901
+======================================================================
