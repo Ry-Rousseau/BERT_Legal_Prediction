@@ -51,6 +51,23 @@ def get_dataloaders(tokenizer, data_path=None, train_file=None, dev_file=None, t
         dataset = load_dataset("csv", data_files=data_path, encoding="utf-8")
         encoded_dataset = dataset.map(lambda x: preprocess_function(x, tokenizer), batched=True)
         encoded_dataset = encoded_dataset.rename_column("12", "labels")
+
+        # Convert string labels to integers, handling None/empty values
+        def convert_label(example):
+            label = example["labels"]
+            # Handle None, empty string, or whitespace
+            if label is None or (isinstance(label, str) and label.strip() == ""):
+                raise ValueError(f"Found invalid/missing label")
+            # Convert to float first (handles "3.0"), then to int
+            try:
+                return {"labels": int(float(label))}
+            except (ValueError, TypeError) as e:
+                raise ValueError(f"Cannot convert label '{label}' to int: {e}")
+
+        encoded_dataset = encoded_dataset.map(
+            convert_label,
+            desc="Converting labels to int"
+        )
         encoded_dataset = encoded_dataset.cast_column("labels", Value("int64"))
         encoded_dataset.set_format("torch", columns=["input_ids", "attention_mask", "labels"])
         return encoded_dataset["train"]
@@ -81,6 +98,33 @@ def get_dataloaders(tokenizer, data_path=None, train_file=None, dev_file=None, t
     # Rename and cast labels for all splits
     for split in encoded_dataset.keys():
         encoded_dataset[split] = encoded_dataset[split].rename_column("12", "labels")
+
+        # Convert string labels to integers, handling None/empty values
+        def convert_label(example):
+            label = example["labels"]
+            # Handle None, empty string, or whitespace
+            if label is None or (isinstance(label, str) and label.strip() == ""):
+                # Provide more context for debugging
+                raise ValueError(
+                    f"Found invalid/missing label in {split} split\n"
+                    f"  Label value: {repr(label)}\n"
+                    f"  Label type: {type(label)}\n"
+                    f"  Example keys: {list(example.keys())[:10]}\n"
+                    f"  First column value: {repr(str(example.get('0', 'N/A'))[:50])}"
+                )
+            # Convert to float first (handles "3.0"), then to int
+            try:
+                return {"labels": int(float(label))}
+            except (ValueError, TypeError) as e:
+                raise ValueError(
+                    f"Cannot convert label '{label}' (type: {type(label)}) to int in {split} split: {e}\n"
+                    f"  Example keys: {list(example.keys())[:10]}"
+                )
+
+        encoded_dataset[split] = encoded_dataset[split].map(
+            convert_label,
+            desc="Converting labels to int"
+        )
         encoded_dataset[split] = encoded_dataset[split].cast_column("labels", Value("int64"))
         encoded_dataset[split].set_format("torch", columns=["input_ids", "attention_mask", "labels"])
 
