@@ -12,9 +12,19 @@ Grid: 4 Student Sizes × 1 Beta = 4 Runs
 Each run has 4 checkpoints (epochs 1-4).
 """
 
+# CRITICAL: Set environment variables BEFORE any imports
+# TensorFlow can steal GPU access from PyTorch if imported first
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Make GPU 0 visible
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow warnings
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'  # Prevent TF from taking all GPU memory
+# Completely disable TensorFlow GPU
+os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
 import gc
 import csv
+
 import torch
 import numpy as np
 from datetime import datetime
@@ -182,45 +192,103 @@ def evaluate_checkpoint(checkpoint_path, eval_dataset, tokenizer, batch_size=4):
         Dict with keys: accuracy, loss, num_samples, inference_time_sec
     """
     import time
+    from dataclasses import dataclass
+    from typing import Any, Dict, List
+
+    # Custom data collator for multiple choice tasks
+    @dataclass
+    class DataCollatorForMultipleChoice:
+        """
+        Data collator for multiple choice tasks.
+        Pads inputs but keeps labels as-is (no padding).
+        """
+        tokenizer: Any
+
+        def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+            batch_size = len(features)
+            num_choices = len(features[0]["input_ids"])
+
+            # Flatten for padding
+            flattened_features = [
+                {k: v[i] for k, v in feature.items() if k != "labels"}
+                for feature in features
+                for i in range(num_choices)
+            ]
+
+            # Pad the flattened features
+            batch = self.tokenizer.pad(
+                flattened_features,
+                padding=True,
+                return_tensors="pt"
+            )
+
+            # Unflatten
+            batch = {k: v.view(batch_size, num_choices, -1) for k, v in batch.items()}
+
+            # Add labels (no padding needed - just stack)
+            batch["labels"] = torch.tensor([f["labels"] for f in features], dtype=torch.long)
+
+            return batch
 
     # Record start time
     start_time = time.time()
 
     # 1. Load model from checkpoint
     print(f"Loading model from {checkpoint_path}...")
-    model = AutoModelForMultipleChoice.from_pretrained(checkpoint_path)
 
-    # 2. Move to device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
+    # 2. Determine device FIRST - with detailed diagnostics
+    print(f"PyTorch version: {torch.__version__}")
+    print(f"CUDA built: {torch.version.cuda}")
+    print(f"CUDA available: {torch.cuda.is_available()}")
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print(f"CUDA is available! Using GPU: {torch.cuda.get_device_name(0)}")
+        print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+    else:
+        device = torch.device("cpu")
+        print("WARNING: CUDA not available, using CPU")
+        print("This will be MUCH slower. Check your PyTorch installation.")
+
+    # 3. Load model directly to the correct device
+    model = AutoModelForMultipleChoice.from_pretrained(checkpoint_path)
+    model = model.to(device)
     model.eval()
 
-    print(f"Model loaded on {device}")
+    print(f"Model loaded on device: {device}")
+    print(f"Model parameter device: {next(model.parameters()).device}")
 
-    # 3. Create Trainer with memory-efficient settings
+    # 3. Create custom data collator
+    data_collator = DataCollatorForMultipleChoice(tokenizer=tokenizer)
+
+    # 4. Create Trainer with memory-efficient settings
+    use_cuda = (device.type == "cuda")
+
     eval_args = TrainingArguments(
         output_dir="./temp_eval",
         per_device_eval_batch_size=batch_size,
         dataloader_num_workers=0,  # Minimize overhead
-        fp16=True,  # Mixed precision
-        use_cpu=False if device == "cuda" else True,
-        no_cuda=False if device == "cuda" else True,
+        fp16=use_cuda,  # Mixed precision only on CUDA
+        no_cuda=(not use_cuda),  # Disable CUDA if not available
         remove_unused_columns=False,
         report_to="none",
     )
 
+    print(f"TrainingArguments: no_cuda={not use_cuda}, fp16={use_cuda}")
+
     trainer = Trainer(
         model=model,
         args=eval_args,
+        data_collator=data_collator,  # Add custom data collator
         compute_metrics=compute_metrics,
     )
 
-    # 4. Evaluate (no gradients needed)
+    # 5. Evaluate (no gradients needed)
     print("Evaluating...")
     with torch.no_grad():
         metrics = trainer.evaluate(eval_dataset)
 
-    # 5. Extract results
+    # 6. Extract results
     accuracy = metrics.get('eval_accuracy', 0.0)
     loss = metrics.get('eval_loss', 0.0)
     num_samples = metrics.get('eval_samples', len(eval_dataset))
@@ -230,10 +298,10 @@ def evaluate_checkpoint(checkpoint_path, eval_dataset, tokenizer, batch_size=4):
 
     print(f"Evaluation complete: Accuracy={accuracy:.4f}, Loss={loss:.4f}, Time={inference_time:.1f}s")
 
-    # 6. CRITICAL: Aggressive memory cleanup
+    # 7. CRITICAL: Aggressive memory cleanup
     del model
     del trainer
-    if device == "cuda":
+    if str(device) == "cuda":
         torch.cuda.empty_cache()
     gc.collect()
 
@@ -345,5 +413,5 @@ def main():
     print(f"{'='*70}")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":    
     main()
