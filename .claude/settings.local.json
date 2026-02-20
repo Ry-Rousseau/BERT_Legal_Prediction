@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(python:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git -C /c/Users/rhrou/Documents/DS_Projects_Local/BERT_Legal_Prediction add docs/plans/2026-02-19-interpretability-v2-design.md)",
+      "Bash(git -C:*)",
+      "Bash(python3:*)",
+      "Bash(/c/Users/rhrou/miniconda3/envs/torch-gpu/python.exe:*)",
+      "Bash(/c/Users/rhrou/miniconda3/envs/torch-gpu/python:*)",
+      "Bash(/c/Users/rhrou/miniconda3/python.exe:*)",
+      "Bash(/c/Users/rhrou/miniconda3/python:*)"
     ],
     "deny": [],
     "ask": []
